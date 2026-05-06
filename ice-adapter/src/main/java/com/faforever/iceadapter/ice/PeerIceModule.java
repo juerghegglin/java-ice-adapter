@@ -565,11 +565,29 @@ public class PeerIceModule {
         }
         if (turnRefreshModule != null) {
             turnRefreshModule.close();
-        }
-        if (agent != null) {
-            agent.free();
+            turnRefreshModule = null;
         }
         connectivityChecker.stop();
+
+        // Mirror the state notifications that onConnectionLost() sends so the FAF client
+        // and telemetry see this peer as fully disconnected. Without this, iceState stayed
+        // at whatever it was (typically CONNECTED) when the peer was closed via the RPC
+        // disconnect path or game-end teardown - the desync reported in issue #59
+        // ("Socket closed, when state Connected").
+        if (connected) {
+            connected = false;
+            rpcService.onConnected(IceAdapter.getId(), peer.getRemoteId(), false);
+        }
+        if (iceState != DISCONNECTED) {
+            setState(DISCONNECTED);
+        }
+
+        if (agent != null) {
+            agent.free();
+            agent = null;
+            mediaStream = null;
+            component = null;
+        }
     }
 
     public long getConnectivityAttempsInThePast(final long millis) {
